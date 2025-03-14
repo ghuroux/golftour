@@ -1,5 +1,5 @@
 'use client';
-import { useContext, useState, useEffect } from 'react';
+import { useContext, useState, useEffect, Suspense } from 'react';
 import { AuthContext } from '@/lib/contexts/AuthContext';
 import { useRouter, useSearchParams } from 'next/navigation'; // Add useSearchParams
 import Link from 'next/link';
@@ -10,7 +10,8 @@ import { registerWithEmailAndPassword, signInWithEmailAndPassword, resetPassword
 // Create a union type for the mode states
 type AuthMode = 'login' | 'register' | 'reset';
 
-export default function LoginPage() {
+// Create a client component that uses useSearchParams
+function LoginContent() {
   const searchParams = useSearchParams(); // Get search parameters
   const initialMode = searchParams.get('mode') as AuthMode || 'login';
   
@@ -365,5 +366,14 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+// Main component that wraps the content in a Suspense boundary
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center">Loading...</div>}>
+      <LoginContent />
+    </Suspense>
   );
 }
