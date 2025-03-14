@@ -1,38 +1,44 @@
 import { NextResponse } from "next/server";
-import fs from "fs";
-import OpenAI from "openai";
-
-const openai = new OpenAI();
+// import OpenAI from "openai";
 
 export async function POST(req: Request) {
-  const body = await req.json();
+  // Return a "not implemented" response
+  return NextResponse.json(
+    { error: 'OpenAI transcription is not currently available' },
+    { status: 501 }
+  );
 
-  const base64Audio = body.audio;
-
-  // Convert the base64 audio data to a Buffer
-  const audio = Buffer.from(base64Audio, "base64");
-
-  // Define the file path for storing the temporary WAV file
-  const filePath = "tmp/input.wav";
+  /* Original implementation commented out
+  const openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+  });
 
   try {
-    // Write the audio data to a temporary WAV file synchronously
-    fs.writeFileSync(filePath, audio);
+    const formData = await req.formData();
+    const audioFile = formData.get('file') as File;
 
-    // Create a readable stream from the temporary WAV file
-    const readStream = fs.createReadStream(filePath);
+    if (!audioFile) {
+      return NextResponse.json(
+        { error: 'No audio file provided' },
+        { status: 400 }
+      );
+    }
 
-    const data = await openai.audio.transcriptions.create({
-      file: readStream,
-      model: "whisper-1",
+    const buffer = Buffer.from(await audioFile.arrayBuffer());
+    const fileBlob = new Blob([buffer]);
+
+    const transcription = await openai.audio.transcriptions.create({
+      file: fileBlob,
+      model: 'whisper-1',
     });
 
-    // Remove the temporary file after successful processing
-    fs.unlinkSync(filePath);
-
-    return NextResponse.json(data);
+    return NextResponse.json({ transcription });
   } catch (error) {
-    console.error("Error processing audio:", error);
-    return NextResponse.error();
+    console.error('Error transcribing audio:', error);
+    return NextResponse.json(
+      { error: 'Error transcribing audio' },
+      { status: 500 }
+    );
   }
+  */
 }

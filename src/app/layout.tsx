@@ -1,4 +1,7 @@
+// app/layout.tsx
 import "./globals.css";
+import { AuthProvider } from "@/lib/contexts/AuthContext";
+import { ToastProvider } from "@/lib/contexts/ToastContext";
 
 export default function RootLayout({
   children,
@@ -7,7 +10,13 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <AuthProvider>
+          <ToastProvider>
+            {children}
+          </ToastProvider>
+        </AuthProvider>
+      </body>
     </html>
   );
 }

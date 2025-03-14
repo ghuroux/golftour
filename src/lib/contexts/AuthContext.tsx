@@ -1,6 +1,5 @@
-"use client";
-
-import React, { createContext, useEffect, useState } from "react";
+'use client';
+import React, { createContext, useEffect, useState, useContext } from "react";
 import { signInWithPopup, GoogleAuthProvider, signOut as firebaseSignOut } from "firebase/auth";
 import { User } from "firebase/auth";
 import { auth } from "../firebase/firebase";
@@ -12,14 +11,25 @@ interface AuthContextType {
   signOut: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType>({
+const defaultContextValue: AuthContextType = {
   user: null,
   loading: true,
   signInWithGoogle: async () => {},
   signOut: async () => {},
-});
+};
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+const AuthContext = createContext<AuthContextType>(defaultContextValue);
+
+export const useAuth = (): AuthContextType => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};
+
+// Make sure this function returns JSX
+export function AuthProvider({ children }: { children: React.ReactNode }): JSX.Element {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -28,7 +38,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(user);
       setLoading(false);
     });
-
     return () => unsubscribe();
   }, []);
 
@@ -49,6 +58,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Explicitly return the JSX
   return (
     <AuthContext.Provider value={{ user, loading, signInWithGoogle, signOut: signOutUser }}>
       {children}
