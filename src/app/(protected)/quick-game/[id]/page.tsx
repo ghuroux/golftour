@@ -24,6 +24,7 @@ interface Round {
   format: string;
   players: string[];
   playerNames: {[key: string]: string};
+  scorers?: string[];
   teams?: {
     team1: {
       name: string;
@@ -43,6 +44,7 @@ interface Round {
   createdBy: string;
   creatorName: string;
   createdAt: any;
+  isComplete?: boolean;
 }
 
 interface Course {
@@ -113,7 +115,9 @@ export default function QuickGamePage() {
   // Check if the current user is the game creator or a player in the game
   const isCreator = auth.user && round?.createdBy === auth.user.uid;
   const isPlayer = auth.user && round?.players.includes(auth.user.uid);
+  const isScorer = round?.scorers?.includes(auth.user?.uid || '') || false;
   const canEditAllScores = isCreator;
+  const canEnterScores = isPlayer || isScorer;
   
   useEffect(() => {
     const fetchGameData = async () => {
@@ -802,7 +806,7 @@ export default function QuickGamePage() {
   }
   
   return (
-    <div className="container mx-auto max-w-6xl px-4 py-8">
+    <div className="container mx-auto max-w-7xl px-4 py-8">
       <div className="mb-8">
         <Link 
           href="/dashboard" 
@@ -828,18 +832,18 @@ export default function QuickGamePage() {
           
           <div className="flex items-center gap-3">
             <div className={`rounded-full px-4 py-2 text-sm font-medium shadow-sm
-              ${round.status === 'completed' 
+              ${(round.status as string) === 'completed' 
                 ? 'bg-green-100 text-green-800' 
-                : round.status === 'in_progress'
+                : (round.status as string) === 'in_progress'
                   ? 'bg-yellow-100 text-yellow-800'
                   : 'bg-blue-100 text-blue-800'
               }`}
             >
-              {round.status === 'completed' ? 'Completed' : 
-               round.status === 'in_progress' ? 'In Progress' : 'Scheduled'}
+              {(round.status as string) === 'completed' ? 'Completed' : 
+               (round.status as string) === 'in_progress' ? 'In Progress' : 'Scheduled'}
             </div>
             
-            {isPlayer && round.status === 'in_progress' && (
+            {canEnterScores && (round.status as string) === 'in_progress' && (
               <Link
                 href={`/quick-game/${gameId}/score`}
                 className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-md transition-colors hover:bg-green-700"
@@ -848,7 +852,7 @@ export default function QuickGamePage() {
                   <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
                   <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
                 </svg>
-                Enter My Scores
+                {isScorer && !isPlayer ? 'Enter Scores' : 'Enter My Scores'}
               </Link>
             )}
           </div>
@@ -879,283 +883,296 @@ export default function QuickGamePage() {
       
       <div className="grid gap-8 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <div className="overflow-hidden rounded-xl bg-white shadow-lg">
-            <div className="bg-gradient-to-r from-green-600 to-green-500 px-6 py-4">
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <h2 className="text-xl font-bold text-white">Scorecard</h2>
-                
-                <div className="flex items-center gap-3 rounded-lg bg-white/10 px-3 py-2 backdrop-blur-sm">
-                  <label className="text-sm font-medium text-white">Player:</label>
-                  <select
-                    value={selectedPlayerId || ''}
-                    onChange={(e) => handlePlayerChange(e.target.value)}
-                    className="rounded-md border-none bg-white/20 p-1.5 text-sm font-medium text-white backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-white/50"
-                  >
-                    {players.map(player => (
-                      <option key={player.id} value={player.id} className="bg-green-600 text-white">
-                        {player.name} {player.id === auth.user?.uid ? '(You)' : ''}
-                      </option>
-                    ))}
-                  </select>
+          {(round.status as string) !== 'completed' && (
+            <div className="overflow-hidden rounded-xl bg-white shadow-lg">
+              <div className="bg-gradient-to-r from-green-600 to-green-500 px-6 py-4">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <h2 className="text-xl font-bold text-white">Scorecard</h2>
+                  
+                  <div className="flex items-center gap-3 rounded-lg bg-white/10 px-3 py-2 backdrop-blur-sm">
+                    <label className="text-sm font-medium text-white">Player:</label>
+                    <select
+                      value={selectedPlayerId || ''}
+                      onChange={(e) => handlePlayerChange(e.target.value)}
+                      className="rounded-md border-none bg-white/20 p-1.5 text-sm font-medium text-white backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-white/50"
+                    >
+                      {players.map(player => (
+                        <option key={player.id} value={player.id} className="bg-green-600 text-white">
+                          {player.name} {player.id === auth.user?.uid ? '(You)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               </div>
-            </div>
-            
-            <div className="overflow-x-auto p-6">
-              {round.format === 'stroke' && (
-                <>
-                  {canEditSelectedPlayer && round.status !== 'completed' ? (
-                    <table className="min-w-full divide-y divide-gray-200 rounded-lg border border-gray-200 shadow-sm">
-                      <thead>
-                        <tr className="bg-gray-50">
-                          <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                            Hole
-                          </th>
-                          {Array.from({ length: course.holeCount }, (_, i) => (
-                            <th key={i} className="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-500">
-                              {i + 1}
+              
+              <div className="overflow-x-auto p-6">
+                {round.format === 'stroke' && (
+                  <>
+                    {canEditSelectedPlayer && (round.status as string) !== 'completed' ? (
+                      <table className="min-w-full divide-y divide-gray-200 rounded-lg border border-gray-200 shadow-sm">
+                        <thead>
+                          <tr className="bg-gray-50">
+                            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                              Hole
                             </th>
-                          ))}
-                          <th className="bg-gray-100 px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-700">
-                            Total
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-200 bg-white">
-                        {course.holes && (
-                          <tr className="bg-green-50">
+                            {Array.from({ length: course.holeCount }, (_, i) => (
+                              <th key={i} className="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-500">
+                                {i + 1}
+                              </th>
+                            ))}
+                            <th className="bg-gray-100 px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-700">
+                              Total
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200 bg-white">
+                          {course.holes && (
+                            <tr className="bg-green-50">
+                              <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">
+                                Par
+                              </td>
+                              {course.holes.map((hole) => (
+                                <td key={hole.number} className="whitespace-nowrap px-4 py-3 text-center text-sm text-gray-900">
+                                  {hole.par}
+                                </td>
+                              ))}
+                              <td className="whitespace-nowrap bg-green-100 px-4 py-3 text-center text-sm font-medium text-gray-900">
+                                {course.holes.reduce((sum, hole) => sum + hole.par, 0)}
+                              </td>
+                            </tr>
+                          )}
+                          <tr>
                             <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">
-                              Par
+                              Score
                             </td>
-                            {course.holes.map((hole) => (
-                              <td key={hole.number} className="whitespace-nowrap px-4 py-3 text-center text-sm text-gray-900">
-                                {hole.par}
+                            {currentScores.map((score, index) => (
+                              <td key={index} className="whitespace-nowrap px-4 py-3 text-center">
+                                <input
+                                  type="number"
+                                  min="1"
+                                  value={score || ''}
+                                  onChange={(e) => handleScoreChange(index, parseInt(e.target.value) || 0)}
+                                  className="w-14 rounded-md border border-gray-300 p-2 text-center text-sm shadow-sm focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-200"
+                                />
                               </td>
                             ))}
-                            <td className="whitespace-nowrap bg-green-100 px-4 py-3 text-center text-sm font-medium text-gray-900">
-                              {course.holes.reduce((sum, hole) => sum + hole.par, 0)}
+                            <td className="whitespace-nowrap bg-gray-100 px-4 py-3 text-center text-sm font-bold text-gray-900">
+                              {calculateTotal(currentScores)}
                             </td>
                           </tr>
-                        )}
-                        <tr>
-                          <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">
-                            Score
-                          </td>
-                          {currentScores.map((score, index) => (
-                            <td key={index} className="whitespace-nowrap px-4 py-3 text-center">
-                              <input
-                                type="number"
-                                min="1"
-                                value={score || ''}
-                                onChange={(e) => handleScoreChange(index, parseInt(e.target.value) || 0)}
-                                className="w-14 rounded-md border border-gray-300 p-2 text-center text-sm shadow-sm focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-200"
-                              />
-                            </td>
-                          ))}
-                          <td className="whitespace-nowrap bg-gray-100 px-4 py-3 text-center text-sm font-bold text-gray-900">
-                            {calculateTotal(currentScores)}
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  ) : (
-                    <>
-                      {course.holes && (
-                        <StrokePlayScorecard
-                          key={`stroke-play-${selectedPlayerId}-${currentScores.join('-')}`}
-                          playerName={round.playerNames[selectedPlayerId!] || 'Player'}
-                          scores={currentScores}
-                          pars={course.holes.map(hole => hole.par)}
-                          strokeIndices={course.holes.map(hole => hole.strokeIndex)}
-                          handicap={players.find(p => p.id === selectedPlayerId)?.handicap}
-                        />
-                      )}
-                    </>
-                  )}
-                </>
-              )}
-              
-              {round.format === 'stableford' && (
-                <>
-                  {canEditSelectedPlayer && round.status !== 'completed' ? (
-                    <table className="min-w-full divide-y divide-gray-200 rounded-lg border border-gray-200 shadow-sm">
-                      <thead>
-                        <tr className="bg-gray-50">
-                          <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                            Hole
-                          </th>
-                          {Array.from({ length: course.holeCount }, (_, i) => (
-                            <th key={i} className="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-500">
-                              {i + 1}
-                            </th>
-                          ))}
-                          <th className="bg-gray-100 px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-700">
-                            Total
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-200 bg-white">
+                        </tbody>
+                      </table>
+                    ) : (
+                      <>
                         {course.holes && (
-                          <tr className="bg-green-50">
+                          <StrokePlayScorecard
+                            key={`stroke-play-${selectedPlayerId}-${currentScores.join('-')}`}
+                            playerName={round.playerNames[selectedPlayerId!] || 'Player'}
+                            scores={currentScores}
+                            pars={course.holes.map(hole => hole.par)}
+                            strokeIndices={course.holes.map(hole => hole.strokeIndex)}
+                            handicap={players.find(p => p.id === selectedPlayerId)?.handicap}
+                          />
+                        )}
+                      </>
+                    )}
+                  </>
+                )}
+                
+                {round.format === 'stableford' && (
+                  <>
+                    {canEditSelectedPlayer && (round.status as string) !== 'completed' ? (
+                      <table className="min-w-full divide-y divide-gray-200 rounded-lg border border-gray-200 shadow-sm">
+                        <thead>
+                          <tr className="bg-gray-50">
+                            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                              Hole
+                            </th>
+                            {Array.from({ length: course.holeCount }, (_, i) => (
+                              <th key={i} className="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-500">
+                                {i + 1}
+                              </th>
+                            ))}
+                            <th className="bg-gray-100 px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-700">
+                              Total
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200 bg-white">
+                          {course.holes && (
+                            <tr className="bg-green-50">
+                              <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">
+                                Par
+                              </td>
+                              {course.holes.map((hole) => (
+                                <td key={hole.number} className="whitespace-nowrap px-4 py-3 text-center text-sm text-gray-900">
+                                  {hole.par}
+                                </td>
+                              ))}
+                              <td className="whitespace-nowrap bg-green-100 px-4 py-3 text-center text-sm font-medium text-gray-900">
+                                {course.holes.reduce((sum, hole) => sum + hole.par, 0)}
+                              </td>
+                            </tr>
+                          )}
+                          <tr>
                             <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">
-                              Par
+                              Score
                             </td>
-                            {course.holes.map((hole) => (
-                              <td key={hole.number} className="whitespace-nowrap px-4 py-3 text-center text-sm text-gray-900">
-                                {hole.par}
+                            {currentScores.map((score, index) => (
+                              <td key={index} className="whitespace-nowrap px-4 py-3 text-center">
+                                <input
+                                  type="number"
+                                  min="1"
+                                  value={score || ''}
+                                  onChange={(e) => handleScoreChange(index, parseInt(e.target.value) || 0)}
+                                  className="w-14 rounded-md border border-gray-300 p-2 text-center text-sm shadow-sm focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-200"
+                                />
                               </td>
                             ))}
-                            <td className="whitespace-nowrap bg-green-100 px-4 py-3 text-center text-sm font-medium text-gray-900">
-                              {course.holes.reduce((sum, hole) => sum + hole.par, 0)}
+                            <td className="whitespace-nowrap bg-gray-100 px-4 py-3 text-center text-sm font-bold text-gray-900">
+                              {calculateTotal(currentScores)}
                             </td>
                           </tr>
+                        </tbody>
+                      </table>
+                    ) : (
+                      <>
+                        {course.holes && (
+                          <StablefordScorecard
+                            key={`stableford-${selectedPlayerId}-${currentScores.join('-')}`}
+                            playerName={round.playerNames[selectedPlayerId!] || 'Player'}
+                            scores={currentScores}
+                            pars={course.holes.map(hole => hole.par)}
+                            strokeIndices={course.holes.map(hole => hole.strokeIndex)}
+                            handicap={players.find(p => p.id === selectedPlayerId)?.handicap}
+                          />
                         )}
-                        <tr>
-                          <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">
-                            Score
-                          </td>
-                          {currentScores.map((score, index) => (
-                            <td key={index} className="whitespace-nowrap px-4 py-3 text-center">
-                              <input
-                                type="number"
-                                min="1"
-                                value={score || ''}
-                                onChange={(e) => handleScoreChange(index, parseInt(e.target.value) || 0)}
-                                className="w-14 rounded-md border border-gray-300 p-2 text-center text-sm shadow-sm focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-200"
-                              />
-                            </td>
-                          ))}
-                          <td className="whitespace-nowrap bg-gray-100 px-4 py-3 text-center text-sm font-bold text-gray-900">
-                            {calculateTotal(currentScores)}
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  ) : (
-                    <>
-                      {course.holes && (
-                        <StablefordScorecard
-                          key={`stableford-${selectedPlayerId}-${currentScores.join('-')}`}
-                          playerName={round.playerNames[selectedPlayerId!] || 'Player'}
-                          scores={currentScores}
-                          pars={course.holes.map(hole => hole.par)}
-                          strokeIndices={course.holes.map(hole => hole.strokeIndex)}
-                          handicap={players.find(p => p.id === selectedPlayerId)?.handicap}
-                        />
-                      )}
-                    </>
-                  )}
-                </>
-              )}
+                      </>
+                    )}
+                  </>
+                )}
+                
+                {round.format === 'match' && course?.holes && (() => {
+                  const pars = course.holes.map(hole => hole.par);
+                  const strokeIndices = course.holes.map(hole => hole.strokeIndex);
+                  const holeNames = course.holes.map((_, i) => (i + 1).toString());
+                  
+                  // Check if this is a team match play game
+                  if (round.useTeams && round.teams && round.teams.team1 && round.teams.team2) {
+                    // For team match play, use TeamMatchPlayScorecard
+                    return (
+                      <TeamMatchPlayScorecard
+                        key={`team-match-play-${JSON.stringify(getPlayersForScorecard().map(p => ({id: p.id, scores: p.scores})))}`}
+                        teams={[
+                          {
+                            id: 'team1',
+                            name: round.teams.team1.name || 'Team 1',
+                            players: getPlayersForScorecard()
+                              .filter(player => round.teams?.team1.players.includes(player.id))
+                                .map(player => ({
+                                  id: player.id,
+                                  name: player.name,
+                                  scores: Array.isArray(player.scores) ? player.scores : [],
+                                  handicap: player.handicap || 0,
+                                  teamId: 'team1'
+                                }))
+                          },
+                          {
+                            id: 'team2',
+                            name: round.teams.team2.name || 'Team 2',
+                            players: getPlayersForScorecard()
+                              .filter(player => round.teams?.team2.players.includes(player.id))
+                                .map(player => ({
+                                  id: player.id,
+                                  name: player.name,
+                                  scores: Array.isArray(player.scores) ? player.scores : [],
+                                  handicap: player.handicap || 0,
+                                  teamId: 'team2'
+                                }))
+                          }
+                        ]}
+                        pars={pars} 
+                        strokeIndices={strokeIndices}
+                        holeNames={holeNames}
+                      />
+                    );
+                  } else {
+                    // For regular match play, use MatchPlayScorecard
+                    return (
+                      <MatchPlayScorecard 
+                        key={`match-play-${JSON.stringify(getPlayersForScorecard().map(p => ({id: p.id, scores: p.scores})))}`}
+                        players={players.slice(0, 2)} 
+                        pars={pars} 
+                        strokeIndices={strokeIndices}
+                        holeNames={holeNames}
+                        scores={scores}
+                        onScoreChange={handleScoreChange}
+                        onSaveScores={handleSaveScores}
+                        isEditable={!!canEditSelectedPlayer && (round.status as string) !== 'completed'}
+                        isLoading={saving}
+                      />
+                    );
+                  }
+                })()}
+              </div>
               
-              {round.format === 'match' && (
-                <>
-                  {round.useTeams ? (
-                    <>
-                      {!round.teams || !round.teams.team1 || !round.teams.team2 ? (
-                        <div className="rounded-lg bg-yellow-50 p-6 text-center">
-                          <h3 className="mb-2 text-lg font-semibold text-yellow-800">Team Setup Required</h3>
-                          <p className="mb-4 text-yellow-700">
-                            This match is set up for team play, but teams haven't been assigned yet.
-                          </p>
-                          <Link 
-                            href={`/quick-game/${gameId}/teams`}
-                            className="inline-flex items-center rounded-md bg-yellow-600 px-4 py-2 text-sm font-medium text-white hover:bg-yellow-700"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="mr-2 h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                              <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
-                            </svg>
-                            Assign Teams
-                          </Link>
-                        </div>
+              {canEditSelectedPlayer && (round.status as string) !== 'completed' && (
+                <div className="border-t border-gray-100 bg-gray-50 px-6 py-4">
+                  <div className="mt-6 flex justify-between">
+                    {/* Debug button - only visible in development */}
+                    {process.env.NODE_ENV === 'development' && (
+                      <button
+                        onClick={() => {
+                          console.log('DEBUG - Current state:');
+                          console.log('Players:', players);
+                          console.log('Scores:', scores);
+                          console.log('Selected Player:', selectedPlayerId);
+                          console.log('Current Scores:', currentScores);
+                          console.log('Round:', round);
+                        }}
+                        className="inline-flex items-center rounded-md bg-gray-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-gray-700"
+                      >
+                        Debug State
+                      </button>
+                    )}
+                    
+                    <button
+                      onClick={handleSaveScores}
+                      disabled={saving}
+                      className="inline-flex items-center rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-green-700 disabled:bg-green-400"
+                    >
+                      {saving ? (
+                        <>
+                          <svg className="mr-2 h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Saving...
+                        </>
                       ) : (
                         <>
-                          {/* Only render the scorecard when we have valid player data with scores */}
-                          {getPlayersForScorecard().some(player => player.scores.length > 0) ? (
-                            <TeamMatchPlayScorecard 
-                              key={`team-match-${JSON.stringify(getPlayersForScorecard().map(p => ({id: p.id, scores: p.scores})))}`}
-                              teams={[
-                                {
-                                  id: 'team1',
-                                  name: round.teams.team1.name || 'Team 1',
-                                  players: getPlayersForScorecard()
-                                    .filter(player => round.teams?.team1.players.includes(player.id))
-                                    .map(player => {
-                                      console.log(`Team 1 player ${player.name} (${player.id}) scores:`, player.scores);
-                                      return {
-                                        id: player.id,
-                                        name: player.name,
-                                        scores: Array.isArray(player.scores) ? player.scores : [],
-                                        handicap: player.handicap || 0,
-                                        teamId: 'team1'
-                                      };
-                                    })
-                                },
-                                {
-                                  id: 'team2',
-                                  name: round.teams.team2.name || 'Team 2',
-                                  players: getPlayersForScorecard()
-                                    .filter(player => round.teams?.team2.players.includes(player.id))
-                                    .map(player => {
-                                      console.log(`Team 2 player ${player.name} (${player.id}) scores:`, player.scores);
-                                      return {
-                                        id: player.id,
-                                        name: player.name,
-                                        scores: Array.isArray(player.scores) ? player.scores : [],
-                                        handicap: player.handicap || 0,
-                                        teamId: 'team2'
-                                      };
-                                    })
-                                }
-                              ]}
-                              pars={course?.holes?.map(hole => hole.par) || []} 
-                              strokeIndices={course?.holes?.map(hole => hole.strokeIndex) || []}
-                              holeNames={course?.holes?.map((_, i) => (i + 1).toString()) || []}
-                              scores={scores}
-                              onScoreChange={handleScoreChange}
-                              onSaveScores={handleSaveScores}
-                              isEditable={!!canEditSelectedPlayer}
-                              isLoading={saving}
-                            />
-                          ) : (
-                            <div className="rounded-lg bg-gray-50 p-6 text-center">
-                              <p className="text-gray-600">Loading scorecard data...</p>
-                            </div>
-                          )}
+                          <svg xmlns="http://www.w3.org/2000/svg" className="mr-2 h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                          Save Player Scores
                         </>
                       )}
-                    </>
-                  ) : (
-                    <>
-                      {/* Only render the scorecard when we have valid player data with scores */}
-                      {getPlayersForScorecard().some(player => player.scores.length > 0) ? (
-                        <MatchPlayScorecard 
-                          key={`match-play-${JSON.stringify(getPlayersForScorecard().map(p => ({id: p.id, scores: p.scores})))}`}
-                          players={getPlayersForScorecard()} 
-                          pars={course?.holes?.map(hole => hole.par) || []} 
-                          strokeIndices={course?.holes?.map(hole => hole.strokeIndex) || []}
-                          holeNames={course?.holes?.map((_, i) => (i + 1).toString()) || []}
-                          scores={scores}
-                          onScoreChange={handleScoreChange}
-                          onSaveScores={handleSaveScores}
-                          isEditable={!!canEditSelectedPlayer}
-                          isLoading={saving}
-                        />
-                      ) : (
-                        <div className="rounded-lg bg-gray-50 p-6 text-center">
-                          <p className="text-gray-600">Loading scorecard data...</p>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </>
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
-            
-            {round.status === 'completed' && (
-              <div className="mt-8 rounded-lg bg-white p-6 shadow-md">
-                <h2 className="mb-6 text-xl font-semibold text-gray-800">Scorecard</h2>
-                
+          )}
+          
+          {/* Dedicated Scorecard section for completed rounds */}
+          {(round.status as string) === 'completed' && (
+            <div className="overflow-hidden rounded-xl bg-white shadow-lg">
+              <div className="bg-gradient-to-r from-green-600 to-green-500 px-6 py-4">
+                <h2 className="text-xl font-bold text-white">Scorecard</h2>
+              </div>
+              
+              <div className="overflow-x-auto p-6">
                 {round.format === 'stroke' && course?.holes && (() => {
                   const pars = course.holes.map(hole => hole.par);
                   const strokeIndices = course.holes.map(hole => hole.strokeIndex);
@@ -1187,70 +1204,67 @@ export default function QuickGamePage() {
                   const pars = course.holes.map(hole => hole.par);
                   const strokeIndices = course.holes.map(hole => hole.strokeIndex);
                   const holeNames = course.holes.map((_, i) => (i + 1).toString());
-                  return (
-                    <MatchPlayScorecard 
-                      key={`match-play-${JSON.stringify(getPlayersForScorecard().map(p => ({id: p.id, scores: p.scores})))}`}
-                      players={players} 
-                      pars={pars} 
-                      strokeIndices={strokeIndices}
-                      holeNames={holeNames}
-                      scores={scores}
-                      onScoreChange={handleScoreChange}
-                      onSaveScores={handleSaveScores}
-                      isEditable={!!canEditSelectedPlayer}
-                      isLoading={saving}
-                    />
-                  );
+                  
+                  // Check if this is a team match play game
+                  if (round.useTeams && round.teams && round.teams.team1 && round.teams.team2) {
+                    // For team match play, use TeamMatchPlayScorecard
+                    return (
+                      <TeamMatchPlayScorecard
+                        key={`team-match-play-${JSON.stringify(getPlayersForScorecard().map(p => ({id: p.id, scores: p.scores})))}`}
+                        teams={[
+                          {
+                            id: 'team1',
+                            name: round.teams.team1.name || 'Team 1',
+                            players: getPlayersForScorecard()
+                              .filter(player => round.teams?.team1.players.includes(player.id))
+                                .map(player => ({
+                                  id: player.id,
+                                  name: player.name,
+                                  scores: Array.isArray(player.scores) ? player.scores : [],
+                                  handicap: player.handicap || 0,
+                                  teamId: 'team1'
+                                }))
+                          },
+                          {
+                            id: 'team2',
+                            name: round.teams.team2.name || 'Team 2',
+                            players: getPlayersForScorecard()
+                              .filter(player => round.teams?.team2.players.includes(player.id))
+                                .map(player => ({
+                                  id: player.id,
+                                  name: player.name,
+                                  scores: Array.isArray(player.scores) ? player.scores : [],
+                                  handicap: player.handicap || 0,
+                                  teamId: 'team2'
+                                }))
+                          }
+                        ]}
+                        pars={pars} 
+                        strokeIndices={strokeIndices}
+                        holeNames={holeNames}
+                      />
+                    );
+                  } else {
+                    // For regular match play, use MatchPlayScorecard
+                    return (
+                      <MatchPlayScorecard 
+                        key={`match-play-${JSON.stringify(getPlayersForScorecard().map(p => ({id: p.id, scores: p.scores})))}`}
+                        players={players.slice(0, 2)} 
+                        pars={pars} 
+                        strokeIndices={strokeIndices}
+                        holeNames={holeNames}
+                        scores={scores}
+                        onScoreChange={handleScoreChange}
+                        onSaveScores={handleSaveScores}
+                        isEditable={false}
+                        isLoading={saving}
+                      />
+                    );
+                  }
                 })()}
               </div>
-            )}
-            
-            {canEditSelectedPlayer && round.status !== 'completed' && (
-              <div className="border-t border-gray-100 bg-gray-50 px-6 py-4">
-                <div className="mt-6 flex justify-between">
-                  {/* Debug button - only visible in development */}
-                  {process.env.NODE_ENV === 'development' && (
-                    <button
-                      onClick={() => {
-                        console.log('DEBUG - Current state:');
-                        console.log('Players:', players);
-                        console.log('Scores:', scores);
-                        console.log('Selected Player:', selectedPlayerId);
-                        console.log('Current Scores:', currentScores);
-                        console.log('Round:', round);
-                      }}
-                      className="inline-flex items-center rounded-md bg-gray-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-gray-700"
-                    >
-                      Debug State
-                    </button>
-                  )}
-                  
-                  <button
-                    onClick={handleSaveScores}
-                    disabled={saving}
-                    className="inline-flex items-center rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-green-700 disabled:bg-green-400"
-                  >
-                    {saving ? (
-                      <>
-                        <svg className="mr-2 h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Saving...
-                      </>
-                    ) : (
-                      <>
-                        <svg xmlns="http://www.w3.org/2000/svg" className="mr-2 h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                        </svg>
-                        Save Player Scores
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
         
         <div className="space-y-8">
@@ -1361,14 +1375,14 @@ export default function QuickGamePage() {
                 <h3 className="text-xs font-medium uppercase tracking-wider text-gray-500">Status</h3>
                 <p className="mt-1">
                   <span className={`inline-block rounded-full px-3 py-1 text-xs font-medium ${
-                    round.status === 'completed' 
+                    (round.status as string) === 'completed' 
                       ? 'bg-green-100 text-green-800' 
-                      : round.status === 'in_progress'
+                      : (round.status as string) === 'in_progress'
                         ? 'bg-yellow-100 text-yellow-800'
                         : 'bg-blue-100 text-blue-800'
                   }`}>
-                    {round.status === 'completed' ? 'Completed' : 
-                     round.status === 'in_progress' ? 'In Progress' : 'Scheduled'}
+                    {(round.status as string) === 'completed' ? 'Completed' : 
+                     (round.status as string) === 'in_progress' ? 'In Progress' : 'Scheduled'}
                   </span>
                 </p>
               </div>
@@ -1386,10 +1400,10 @@ export default function QuickGamePage() {
       <div className="mt-8 flex justify-end">
         <button
           onClick={handleCompleteRound}
-          disabled={saving || round?.status === 'completed'}
+          disabled={saving || (round.status as string) === 'completed'}
           className="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 disabled:bg-blue-400"
         >
-          {round?.status === 'completed' ? (
+          {(round.status as string) === 'completed' ? (
             <>
               <svg xmlns="http://www.w3.org/2000/svg" className="mr-2 h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
