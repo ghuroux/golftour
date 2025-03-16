@@ -358,3 +358,267 @@ export const fixMissingArchivedFields = async () => {
     throw error;
   }
 };
+
+// Ryder Cup functions
+export const createRyderCupRound = async (roundData: any) => {
+  return addDoc(collection(db, 'rounds'), {
+    ...roundData,
+    isRyderCup: true,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  });
+};
+
+export const getRyderCupMatches = async (roundId: string) => {
+  const querySnapshot = await getDocs(
+    query(collection(db, 'ryderCupMatches'), where('roundId', '==', roundId))
+  );
+  return querySnapshot.docs.map(doc => ({
+    id: doc.id,
+    ...(doc.data() as object)
+  }));
+};
+
+export const createRyderCupMatch = async (matchData: any) => {
+  return addDoc(collection(db, 'ryderCupMatches'), {
+    ...matchData,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  });
+};
+
+export const updateRyderCupMatch = async (matchId: string, matchData: any) => {
+  return updateDoc(doc(db, 'ryderCupMatches', matchId), {
+    ...matchData,
+    updatedAt: new Date()
+  });
+};
+
+export const updateRyderCupTeams = async (roundId: string, teamsData: any) => {
+  return updateDoc(doc(db, 'rounds', roundId), {
+    teams: teamsData,
+    updatedAt: new Date()
+  });
+};
+
+// Enhanced scoring functions
+export const submitPlayerScore = async (scoreData: any) => {
+  console.log('Submitting player score:', {
+    roundId: scoreData.roundId,
+    playerId: scoreData.playerId,
+    playerName: scoreData.playerName,
+    totalScore: scoreData.total,
+    handicap: scoreData.handicap,
+    holeScoresCount: scoreData.holeScores?.length
+  });
+
+  try {
+    // Check if a score document already exists for this player and round
+    const existingScoreQuery = query(
+      collection(db, 'scores'),
+      where('roundId', '==', scoreData.roundId),
+      where('playerId', '==', scoreData.playerId)
+    );
+    
+    const existingScoreSnapshot = await getDocs(existingScoreQuery);
+    
+    if (!existingScoreSnapshot.empty) {
+      // Update existing score
+      const scoreDoc = existingScoreSnapshot.docs[0];
+      console.log(`Updating existing score document ${scoreDoc.id} for player ${scoreData.playerName}`);
+      return updateDoc(doc(db, 'scores', scoreDoc.id), {
+        ...scoreData,
+        updatedAt: new Date()
+      });
+    } else {
+      // Create new score
+      console.log(`Creating new score document for player ${scoreData.playerName}`);
+      return addDoc(collection(db, 'scores'), {
+        ...scoreData,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+    }
+  } catch (error) {
+    console.error('Error in submitPlayerScore:', error);
+    throw error;
+  }
+};
+
+export const getPlayerScores = async (roundId: string, playerId: string) => {
+  const querySnapshot = await getDocs(
+    query(
+      collection(db, 'scores'),
+      where('roundId', '==', roundId),
+      where('playerId', '==', playerId)
+    )
+  );
+  
+  if (querySnapshot.empty) {
+    return null;
+  }
+  
+  return {
+    id: querySnapshot.docs[0].id,
+    ...(querySnapshot.docs[0].data() as object)
+  };
+};
+
+export const getRoundScores = async (roundId: string) => {
+  const querySnapshot = await getDocs(
+    query(collection(db, 'scores'), where('roundId', '==', roundId))
+  );
+  
+  return querySnapshot.docs.map(doc => ({
+    id: doc.id,
+    ...(doc.data() as object)
+  }));
+};
+
+export const updateRoundStatus = async (roundId: string, status: 'scheduled' | 'in_progress' | 'completed') => {
+  return updateDoc(doc(db, 'rounds', roundId), {
+    status,
+    updatedAt: new Date(),
+    ...(status === 'completed' ? { completedAt: new Date() } : {})
+  });
+};
+
+export const getPlayerHandicap = async (playerId: string) => {
+  // First check if it's a registered user
+  const userDoc = await getDoc(doc(db, 'users', playerId));
+  
+  if (userDoc.exists()) {
+    const userData = userDoc.data();
+    return userData.handicap || 0;
+  }
+  
+  // If not a registered user, check if it's a manual player
+  const playerDoc = await getDoc(doc(db, 'players', playerId));
+  
+  if (playerDoc.exists()) {
+    const playerData = playerDoc.data();
+    return playerData.handicap || 0;
+  }
+  
+  return 0; // Default handicap if player not found
+};
+
+export const updatePlayerHandicap = async (playerId: string, handicap: number) => {
+  // First check if it's a registered user
+  const userDoc = await getDoc(doc(db, 'users', playerId));
+  
+  if (userDoc.exists()) {
+    return updateDoc(doc(db, 'users', playerId), {
+      handicap,
+      updatedAt: new Date()
+    });
+  }
+  
+  // If not a registered user, check if it's a manual player
+  const playerDoc = await getDoc(doc(db, 'players', playerId));
+  
+  if (playerDoc.exists()) {
+    return updateDoc(doc(db, 'players', playerId), {
+      handicap,
+      updatedAt: new Date()
+    });
+  }
+  
+  throw new Error('Player not found');
+};
+
+// Get all rounds for a player
+export const getPlayerRounds = async (playerId: string, showArchived: boolean = false) => {
+  // Get rounds where player is a participant
+  const playerRoundsQuery = query(
+    collection(db, 'rounds'),
+    where('players', 'array-contains', playerId),
+    where('isArchived', '==', showArchived)
+  );
+  
+  const playerRoundsSnapshot = await getDocs(playerRoundsQuery);
+  
+  return playerRoundsSnapshot.docs.map(doc => ({
+    id: doc.id,
+    ...(doc.data() as object)
+  }));
+};
+
+// Get leaderboard data for a tour
+export const getTourLeaderboard = async (tourId: string) => {
+  // Get all rounds in the tour
+  const roundsQuery = query(
+    collection(db, 'rounds'),
+    where('tourId', '==', tourId)
+  );
+  
+  const roundsSnapshot = await getDocs(roundsQuery);
+  const rounds = roundsSnapshot.docs.map(doc => ({
+    id: doc.id,
+    ...(doc.data() as object)
+  }));
+  
+  // Get all scores for these rounds
+  const leaderboardData: any = {};
+  
+  for (const round of rounds) {
+    const scoresQuery = query(
+      collection(db, 'scores'),
+      where('roundId', '==', round.id)
+    );
+    
+    const scoresSnapshot = await getDocs(scoresQuery);
+    
+    scoresSnapshot.docs.forEach(scoreDoc => {
+      const scoreData = scoreDoc.data();
+      const playerId = scoreData.playerId;
+      
+      if (!leaderboardData[playerId]) {
+        leaderboardData[playerId] = {
+          playerId,
+          playerName: scoreData.playerName || 'Unknown Player',
+          rounds: {},
+          totalGross: 0,
+          totalNet: 0,
+          totalStableford: 0,
+          matchesWon: 0,
+          matchesLost: 0,
+          matchesHalved: 0
+        };
+      }
+      
+      // Add round data
+      leaderboardData[playerId].rounds[round.id] = {
+        scores: scoreData.scores || [],
+        totalGross: scoreData.totalGross || 0,
+        totalNet: scoreData.totalNet || 0,
+        totalStableford: scoreData.totalStableford || 0,
+        matchResult: scoreData.matchResult
+      };
+      
+      // Update totals
+      if (scoreData.totalGross) {
+        leaderboardData[playerId].totalGross += scoreData.totalGross;
+      }
+      
+      if (scoreData.totalNet) {
+        leaderboardData[playerId].totalNet += scoreData.totalNet;
+      }
+      
+      if (scoreData.totalStableford) {
+        leaderboardData[playerId].totalStableford += scoreData.totalStableford;
+      }
+      
+      // Update match results
+      if (scoreData.matchResult === 'win') {
+        leaderboardData[playerId].matchesWon++;
+      } else if (scoreData.matchResult === 'loss') {
+        leaderboardData[playerId].matchesLost++;
+      } else if (scoreData.matchResult === 'halved') {
+        leaderboardData[playerId].matchesHalved++;
+      }
+    });
+  }
+  
+  return Object.values(leaderboardData);
+};

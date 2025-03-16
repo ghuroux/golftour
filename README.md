@@ -1,44 +1,64 @@
-# Golf Tour
+# Golf Tour Manager
 
-A modern web application for organizing and managing golf tournaments, tracking scores, and connecting with fellow golfers.
-
-![Golf Tour Screenshot](https://via.placeholder.com/800x400?text=Golf+Tour+Screenshot)
-
-[![Vercel](https://img.shields.io/badge/Vercel-Deployment-black?style=for-the-badge&logo=vercel)](https://golfer-app.vercel.app/)
+A comprehensive web application for managing golf tours, rounds, and scorecards. Perfect for organizing golf events with friends, tracking scores, and creating competitive tournaments.
 
 ## Features
 
-- **User Authentication**: Secure login and registration with Firebase Authentication
-- **Profile Management**: Create and manage your golf profile with handicap tracking
-- **Tournament Creation**: Organize golf tournaments with customizable formats
-- **Quick Games**: Set up casual rounds with friends
-- **Real-time Scoring**: Enter scores hole-by-hole with automatic calculations
-- **Multiple Game Formats**: Support for stroke play, match play, stableford, and team competitions
-- **Leaderboards**: Real-time leaderboards for tournaments and games
-- **Course Management**: Add and manage golf courses with hole details
-- **Mobile Responsive**: Fully responsive design for desktop and mobile use
+- **Tour Management**
+  - Create and manage golf tours
+  - Invite players to join tours
+  - Track tour leaderboards and statistics
+
+- **Course Management**
+  - Create and save golf courses
+  - Define hole details (par, stroke index, distance)
+  - Support for both 9-hole and 18-hole courses
+
+- **Round Management**
+  - Create rounds within tours
+  - Support for various game formats:
+    - Stroke Play
+    - Match Play
+    - Stableford
+    - Team formats (Four-ball, Foursomes)
+    - Ryder Cup format
+
+- **Scoring**
+  - Real-time score entry
+  - Automatic handicap calculations
+  - Mobile-friendly scorecard interface
+  - Leaderboard views
+
+- **Quick Games**
+  - Create one-off games without setting up a tour
+  - Invite friends or add manual players
+  - Choose from various game formats
+
+- **User Management**
+  - User registration and authentication
+  - Player profiles with handicap tracking
+  - Friend management
 
 ## Technology Stack
 
-- **Frontend**: React with Next.js 14 App Router
-- **Styling**: TailwindCSS for responsive design
-- **Backend**: Firebase (Firestore, Authentication, Storage)
-- **Hosting**: Vercel
+- **Frontend**: Next.js 14 (App Router), React, TypeScript, Tailwind CSS
+- **Backend**: Firebase (Authentication, Firestore, Storage)
+- **Authentication**: Firebase Authentication (Email/Password, Google)
+- **Deployment**: Vercel
 
 ## Getting Started
 
 ### Prerequisites
 
-- Node.js 18.x or higher
-- npm or yarn
+- Node.js 18+ and npm/yarn
 - Firebase account
 
 ### Installation
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/ghuroux/golfer-app.git
-   cd golfer-app
+   git clone https://github.com/yourusername/golftour.git
+   cd golftour
    ```
 
 2. Install dependencies:
@@ -65,75 +85,77 @@ A modern web application for organizing and managing golf tournaments, tracking 
    yarn dev
    ```
 
-5. Open [http://localhost:3000](http://localhost:3000) in your browser to see the application.
+5. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-### Firebase Setup
+## Firebase Setup
 
 1. Create a new Firebase project at [https://console.firebase.google.com/](https://console.firebase.google.com/)
-2. Enable Authentication with Email/Password and Google sign-in methods
+2. Enable Authentication (Email/Password and Google providers)
 3. Create a Firestore database
-4. Set up Firestore security rules (see `firestore.rules` in the repository)
-5. Configure Firebase Storage for profile pictures and other uploads
+4. Set up Storage
+5. Add your web app to the Firebase project to get the configuration values
 
-## Deployment
+## Usage Guide
 
-The application is configured for easy deployment to Vercel:
+### Creating a Tour
 
-1. Push your code to a GitHub repository
-2. Import the project in Vercel
-3. Configure environment variables in the Vercel dashboard
-4. Deploy!
+1. Register and log in to your account
+2. Navigate to the dashboard
+3. Click "Create New Tour"
+4. Fill in the tour details:
+   - Tour name
+   - Description
+   - Select or create a golf course
+   - Configure tour settings (teams, leaderboard visibility)
+   - Invite friends
 
-Alternatively, you can use the Vercel CLI:
+### Creating a Course
 
-```bash
-npm install -g vercel
-vercel login
-vercel
-```
+1. From the dashboard, go to "Golf Courses"
+2. Click "Add New Course"
+3. Enter course details:
+   - Course name
+   - Location
+   - Number of holes (9 or 18)
+   - For each hole: par, stroke index, and distance
 
-## Project Structure
+### Creating a Round
 
-```
-/src
-  /app                 # Next.js App Router pages
-    /(protected)       # Protected routes requiring authentication
-      /dashboard       # User dashboard
-      /profile         # User profile management
-      /tours           # Tournament management
-      /quick-game      # Quick game setup and scoring
-    /api               # API routes
-  /components          # React components
-  /lib                 # Utility functions and hooks
-    /contexts          # React contexts (Auth, etc.)
-    /firebase          # Firebase configuration and utilities
-    /hooks             # Custom React hooks
-    /utils             # Helper functions
-```
+1. Navigate to a tour
+2. Click "Add Round"
+3. Select a course
+4. Choose the game format
+5. Select players
+6. Configure team settings (if applicable)
+7. Set the date and time
 
-## Scoring Formats
+### Entering Scores
 
-The application supports multiple golf scoring formats:
+1. Navigate to an active round
+2. Click "Enter Scores"
+3. Fill in your scores for each hole
+4. Save your scorecard
 
-- **Stroke Play**: Traditional scoring where the total number of strokes determines the winner
-- **Match Play**: Hole-by-hole competition between players or teams
-- **Stableford**: Points-based scoring system that rewards good play on individual holes
-- **Team Competitions**: Various team formats including best ball and alternate shot
+### Quick Games
+
+1. From the dashboard, click "Quick Game"
+2. Select a course
+3. Choose the game format
+4. Add players (friends or manual entries)
+5. Start the game and enter scores
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
-## Contact
+## Acknowledgements
 
-For any questions or inquiries about this project, please contact:
-
-- **Email**: [your-email@example.com](mailto:your-email@example.com)
-- **Website**: [your-website.com](https://your-website.com)
-
-## Acknowledgments
-
-- [Next.js](https://nextjs.org/) - The React framework
-- [TailwindCSS](https://tailwindcss.com/) - Utility-first CSS framework
-- [Firebase](https://firebase.google.com/) - Backend services
-- [Vercel](https://vercel.com/) - Deployment platform
+- [Next.js](https://nextjs.org/)
+- [React](https://reactjs.org/)
+- [Tailwind CSS](https://tailwindcss.com/)
+- [Firebase](https://firebase.google.com/)
+- [Vercel](https://vercel.com/)

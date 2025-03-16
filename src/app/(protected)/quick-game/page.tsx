@@ -22,6 +22,7 @@ interface Friend {
   handicap?: number;
   addedAt: any;
   selected?: boolean;
+  isScorer?: boolean;
 }
 
 interface Player {
@@ -47,7 +48,8 @@ export default function QuickGamePage() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [loadingCourses, setLoadingCourses] = useState(true);
   const [isCourseModalOpen, setIsCourseModalOpen] = useState(false);
-  const [manualPlayers, setManualPlayers] = useState<{name: string, handicap?: number}[]>([]);
+  const [selectedScorers, setSelectedScorers] = useState<string[]>([]);
+  const [manualPlayers, setManualPlayers] = useState<{name: string, handicap?: number, isScorer?: boolean}[]>([]);
   const [newPlayerName, setNewPlayerName] = useState('');
   const [newPlayerHandicap, setNewPlayerHandicap] = useState<number | undefined>(undefined);
 
@@ -90,7 +92,8 @@ export default function QuickGamePage() {
         const friendsList = friendsSnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data(),
-          selected: false
+          selected: false,
+          isScorer: false
         })) as Friend[];
         
         setFriends(friendsList);
@@ -133,12 +136,40 @@ export default function QuickGamePage() {
     });
   };
 
+  const toggleScorerSelection = (friendId: string) => {
+    setFriends(prev => 
+      prev.map(friend => 
+        friend.id === friendId 
+          ? { ...friend, isScorer: !friend.isScorer } 
+          : friend
+      )
+    );
+    
+    setSelectedScorers(prev => {
+      return prev.includes(friendId)
+        ? prev.filter(id => id !== friendId)
+        : [...prev, friendId];
+    });
+  };
+
+  const toggleManualPlayerScorer = (index: number) => {
+    setManualPlayers(prev => {
+      const newPlayers = [...prev];
+      newPlayers[index] = {
+        ...newPlayers[index],
+        isScorer: !newPlayers[index].isScorer
+      };
+      return newPlayers;
+    });
+  };
+
   const addManualPlayer = () => {
     if (!newPlayerName.trim()) return;
     
     const newPlayer = { 
       name: newPlayerName.trim(), 
-      handicap: newPlayerHandicap 
+      handicap: newPlayerHandicap,
+      isScorer: false
     };
     
     setManualPlayers(prev => {
@@ -233,12 +264,20 @@ export default function QuickGamePage() {
           playerNames[friend.id] = friend.displayName;
         });
       
+      // Collect all scorers (creator is always a scorer)
+      const scorers = [auth.user.uid, ...selectedScorers];
+      
       // Add manual players with temporary IDs
       for (let index = 0; index < manualPlayers.length; index++) {
         const player = manualPlayers[index];
         const tempId = `manual-${Date.now()}-${index}`;
         players.push(tempId);
         playerNames[tempId] = player.name;
+        
+        // Add to scorers if designated
+        if (player.isScorer) {
+          scorers.push(tempId);
+        }
         
         // Create a document in the players collection for the manual player
         await setDoc(doc(db, 'players', tempId), {
@@ -258,14 +297,15 @@ export default function QuickGamePage() {
         format,
         players,
         playerNames,
+        scorers,
         teams: useTeams ? {
           team1: { name: 'Team 1', players: [], color: '#3b82f6' },
           team2: { name: 'Team 2', players: [], color: '#ef4444' }
-        } : null, // Initialize with empty teams structure if useTeams is true
+        } : null,
         useTeams,
         status: 'in_progress',
-        isQuickGame: true, // Flag to identify this as a quick game
-        tourId: null, // No associated tour
+        isQuickGame: true,
+        tourId: null,
         createdBy: auth.user.uid,
         creatorName,
         createdAt: Timestamp.now(),
@@ -445,29 +485,40 @@ export default function QuickGamePage() {
               <h3 className="mb-4 text-lg font-semibold text-gray-800">Players</h3>
               
               <div className="mb-6 rounded-lg bg-green-50 p-4 shadow-sm">
-                <div className="flex items-center">
-                  <div className="mr-3 h-10 w-10 overflow-hidden rounded-full bg-green-100 shadow-sm">
-                    {auth.user.photoURL ? (
-                      <img src={auth.user.photoURL} alt={auth.user.displayName || 'You'} className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center bg-green-200 text-green-700">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                        </svg>
-                      </div>
-                    )}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <div className="mr-3 h-10 w-10 overflow-hidden rounded-full bg-green-100 shadow-sm">
+                      {auth.user.photoURL ? (
+                        <img src={auth.user.photoURL} alt={auth.user.displayName || 'You'} className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center bg-green-200 text-green-700">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                          </svg>
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-800">
+                        {auth.user.displayName || auth.user.email}
+                      </span>
+                      <p className="text-sm text-green-700">Game Creator</p>
+                    </div>
                   </div>
-                  <div>
-                    <span className="font-medium text-gray-800">
-                      {auth.user.displayName || auth.user.email}
-                    </span>
-                    <p className="text-sm text-green-700">Game Creator</p>
+                  <div className="rounded-full bg-green-200 px-3 py-1 text-xs font-medium text-green-800">
+                    Scorer
                   </div>
                 </div>
               </div>
               
               <div className="mb-6">
-                <h4 className="mb-3 text-sm font-medium text-gray-700">Friends</h4>
+                <div className="mb-3 flex items-center justify-between">
+                  <h4 className="text-sm font-medium text-gray-700">Friends</h4>
+                  <div className="text-xs text-gray-500">
+                    <span className="mr-2">Click to select player</span>
+                    <span className="rounded-full bg-green-200 px-2 py-0.5 text-green-800">Scorer</span> = Can enter scores
+                  </div>
+                </div>
                 {loadingFriends ? (
                   <div className="flex items-center justify-center rounded-lg border border-gray-200 bg-gray-50 py-8">
                     <div className="h-6 w-6 animate-spin rounded-full border-b-2 border-t-2 border-green-700"></div>
@@ -482,9 +533,11 @@ export default function QuickGamePage() {
                             ? 'border border-green-300 bg-green-50 shadow-sm' 
                             : 'border border-transparent bg-gray-50 hover:bg-gray-100'
                         }`}
-                        onClick={() => toggleFriendSelection(friend.id)}
                       >
-                        <div className="flex items-center">
+                        <div 
+                          className="flex flex-1 items-center"
+                          onClick={() => toggleFriendSelection(friend.id)}
+                        >
                           <div className="mr-3 h-10 w-10 overflow-hidden rounded-full bg-gray-100 shadow-sm">
                             {friend.photoURL ? (
                               <img src={friend.photoURL} alt={friend.displayName} className="h-full w-full object-cover" />
@@ -505,12 +558,33 @@ export default function QuickGamePage() {
                             )}
                           </div>
                         </div>
-                        <div className="flex h-6 w-6 items-center justify-center rounded-md border border-gray-300 bg-white shadow-sm">
+                        <div className="flex items-center">
                           {friend.selected && (
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                            </svg>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleScorerSelection(friend.id);
+                              }}
+                              className={`mr-3 rounded-full px-3 py-1 text-xs font-medium ${
+                                friend.isScorer
+                                  ? 'bg-green-200 text-green-800'
+                                  : 'bg-gray-200 text-gray-700 hover:bg-green-100'
+                              }`}
+                            >
+                              {friend.isScorer ? 'Scorer' : 'Make Scorer'}
+                            </button>
                           )}
+                          <div 
+                            className="flex h-6 w-6 items-center justify-center rounded-md border border-gray-300 bg-white shadow-sm"
+                            onClick={() => toggleFriendSelection(friend.id)}
+                          >
+                            {friend.selected && (
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -532,6 +606,9 @@ export default function QuickGamePage() {
                 {selectedFriends.length > 0 && (
                   <div className="mt-2 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
                     <span className="font-medium">{selectedFriends.length}</span> friend{selectedFriends.length !== 1 ? 's' : ''} selected
+                    {selectedScorers.length > 0 && (
+                      <span> • <span className="font-medium">{selectedScorers.length}</span> scorer{selectedScorers.length !== 1 ? 's' : ''}</span>
+                    )}
                   </div>
                 )}
               </div>
@@ -584,16 +661,29 @@ export default function QuickGamePage() {
                             )}
                           </div>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => removeManualPlayer(index)}
-                          className="rounded-full p-1.5 text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-600"
-                          aria-label="Remove player"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
+                        <div className="flex items-center">
+                          <button
+                            type="button"
+                            onClick={() => toggleManualPlayerScorer(index)}
+                            className={`mr-3 rounded-full px-3 py-1 text-xs font-medium ${
+                              player.isScorer
+                                ? 'bg-green-200 text-green-800'
+                                : 'bg-gray-200 text-gray-700 hover:bg-green-100'
+                            }`}
+                          >
+                            {player.isScorer ? 'Scorer' : 'Make Scorer'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeManualPlayer(index)}
+                            className="rounded-full p-1.5 text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-600"
+                            aria-label="Remove player"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>

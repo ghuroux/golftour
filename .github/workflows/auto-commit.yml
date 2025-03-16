@@ -1,0 +1,42 @@
+name: Auto Commit
+
+on:
+  workflow_dispatch:  # Allows manual triggering
+  push:              # Runs on push events
+  schedule:
+    - cron: '0 */6 * * *'  # Runs every 6 hours
+
+jobs:
+  auto-commit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Needed for pushing commits
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetches all history for all branches and tags
+      
+      - name: Setup Git
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+      
+      # This step will automatically commit and push changes
+      - name: Auto Commit
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Auto-commit: Update files"
+          commit_options: '--no-verify'
+          file_pattern: '.'
+          push_options: '--force'
+          skip_dirty_check: true  # Commits even if there are no changes
+          
+      # Optional: Create a dummy file to ensure there's always something to commit
+      - name: Create timestamp file
+        run: |
+          echo "Last auto-commit: $(date)" > timestamp.txt
+          git add timestamp.txt
+          git commit -m "Update timestamp [skip ci]"
+          git push 

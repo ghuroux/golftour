@@ -214,6 +214,113 @@ export function formatMatchPlayStatus(status: { status: 'up' | 'down' | 'all squ
 }
 
 /**
+ * Format match play result in proper notation
+ * @param difference Difference in holes
+ * @param holesRemaining Number of holes remaining
+ * @returns Formatted string (e.g., "6&5")
+ */
+export function formatMatchPlayResult(difference: number, holesRemaining: number): string {
+  if (holesRemaining === 0) {
+    // Match played to the end
+    return `${difference} UP`;
+  } else {
+    // Match ended early - the correct format is "X&Y" where X is the lead when the match was decided
+    return `${difference}&${holesRemaining}`;
+  }
+}
+
+/**
+ * Determine if a match is mathematically decided
+ * @param holeResults Array of hole results (1, -1, or 0)
+ * @param totalHoles Total number of holes in the round
+ * @returns Object with information about the match result
+ */
+export function determineMatchResult(holeResults: number[], totalHoles: number): {
+  isOver: boolean;
+  leadingPlayer: 1 | 2 | 0; // 1 = player1/team1, 2 = player2/team2, 0 = tied
+  difference: number;
+  holesRemaining: number;
+  matchNotation: string;
+  endedOnHole: number;
+} {
+  // Calculate current match status
+  const status = calculateMatchPlayStatus(holeResults);
+  
+  // Count holes with valid results (not 0)
+  const playedHoles = holeResults.filter(result => result !== 0).length;
+  const remainingHoles = totalHoles - holeResults.length;
+  
+  // Determine if match is mathematically decided
+  if (status.difference > remainingHoles) {
+    // Find the hole where the match became mathematically decided
+    let decidedOnHole = 0;
+    let runningResults = [];
+    let leadAtDecision = 0;
+    
+    for (let i = 0; i < holeResults.length; i++) {
+      if (holeResults[i] !== 0) {
+        runningResults.push(holeResults[i]);
+        const runningStatus = calculateMatchPlayStatus(runningResults);
+        const holesLeftAfterThis = totalHoles - (i + 1);
+        
+        if (runningStatus.difference > holesLeftAfterThis) {
+          decidedOnHole = i + 1;
+          leadAtDecision = runningStatus.difference;
+          break;
+        }
+      }
+    }
+    
+    const holesRemaining = totalHoles - decidedOnHole;
+    // Use the lead at the time the match was decided for the match notation
+    const matchNotation = formatMatchPlayResult(leadAtDecision, holesRemaining);
+    
+    return {
+      isOver: true,
+      leadingPlayer: status.status === 'up' ? 1 : 2,
+      difference: status.difference, // This is the final difference
+      holesRemaining,
+      matchNotation,
+      endedOnHole: decidedOnHole
+    };
+  }
+  
+  // If all holes played and there's a winner
+  if (playedHoles === totalHoles && status.difference > 0) {
+    return {
+      isOver: true,
+      leadingPlayer: status.status === 'up' ? 1 : 2,
+      difference: status.difference,
+      holesRemaining: 0,
+      matchNotation: `${status.difference} UP`,
+      endedOnHole: totalHoles
+    };
+  }
+  
+  // If all holes played and match is tied
+  if (playedHoles === totalHoles && status.difference === 0) {
+    return {
+      isOver: true,
+      leadingPlayer: 0,
+      difference: 0,
+      holesRemaining: 0,
+      matchNotation: 'AS',
+      endedOnHole: totalHoles
+    };
+  }
+  
+  // Match is not over yet
+  return {
+    isOver: false,
+    leadingPlayer: status.status === 'up' ? 1 : status.status === 'down' ? 2 : 0,
+    difference: status.difference,
+    holesRemaining: remainingHoles,
+    matchNotation: formatMatchPlayStatus(status),
+    endedOnHole: 0
+  };
+}
+
+/**
  * Calculate Ryder Cup points for a match
  * @param matchResults Array of hole results
  * @param holesPlayed Number of holes played

@@ -1,34 +1,51 @@
 'use client';
 
-import { useAuth } from '@/lib/contexts/AuthContext';
-import { useState, useEffect } from 'react';
-import { doc, getDoc, collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
+import React from 'react';
+import { redirect } from 'next/navigation';
+import { getDoc, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase/firebase';
-import { useParams, useRouter } from 'next/navigation';
-import MobileScoreCapture from '@/components/MobileScoreCapture';
+import { useAuth } from '@/lib/hooks/useAuth';
+import EnhancedScoreCapture from '@/components/EnhancedScoreCapture';
+import LoadingSpinner from '@/components/LoadingSpinner';
 
 interface Round {
   id: string;
   name: string;
   courseId: string;
   courseName: string;
-  format: string;
-  players: string[];
-  playerNames: {[key: string]: string};
-  status: 'scheduled' | 'in_progress' | 'completed';
+  date: Date;
+  players: string[]; // Array of player IDs
+  playerNames?: {[key: string]: string}; // Map of player IDs to names
+  createdBy: string;
+  createdAt: Date;
+  updatedAt: Date;
+  isComplete?: boolean;
+  scorers?: string[]; // IDs of players who can score for others
+  tourType?: 'standard' | 'rydercup'; // Add tour type
+}
+
+interface RoundPlayer {
+  id: string;
+  name: string;
+  scores?: number[];
+  handicap?: number;
+  isScorer?: boolean;
+  teamId?: string;
 }
 
 interface Course {
   id: string;
   name: string;
-  location: string;
+  holes: Hole[];
+  par: number;
   holeCount: number;
-  holes?: {
-    number: number;
-    par: number;
-    strokeIndex: number;
-    distance: number;
-  }[];
+}
+
+interface Hole {
+  number: number;
+  par: number;
+  strokeIndex: number;
+  distance: number;
 }
 
 interface Score {
@@ -38,145 +55,157 @@ interface Score {
   playerName: string;
   holeScores: number[];
   total: number;
+  handicap: number;
+  submittedBy: string;
+  submittedAt: Date;
 }
 
-export default function MobileScorePage() {
-  const params = useParams();
-  const gameId = params.id as string;
-  const auth = useAuth();
-  const router = useRouter();
-  
-  const [round, setRound] = useState<Round | null>(null);
-  const [course, setCourse] = useState<Course | null>(null);
-  const [existingScore, setExistingScore] = useState<Score | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  
-  useEffect(() => {
+export default function ScorePage({ params }: { params: { id: string } }) {
+  const { user, loading: authLoading } = useAuth();
+  const [round, setRound] = React.useState<Round | null>(null);
+  const [course, setCourse] = React.useState<Course | null>(null);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState('');
+  const [debugInfo, setDebugInfo] = React.useState<any>(null);
+
+  // Fetch round and course data
+  React.useEffect(() => {
     const fetchData = async () => {
-      if (!auth.user) {
-        router.push('/login');
+      if (authLoading) return;
+      
+      if (!user) {
+        redirect('/login');
         return;
       }
-      
-      setLoading(true);
+
       try {
-        // Fetch round details
-        const roundDoc = await getDoc(doc(db, 'rounds', gameId));
-        
+        // Get round data
+        const roundDoc = await getDoc(doc(db, 'rounds', params.id));
         if (!roundDoc.exists()) {
-          setError('Game not found');
+          setError('Round not found');
           setLoading(false);
           return;
         }
-        
+
         const roundData = { id: roundDoc.id, ...roundDoc.data() } as Round;
         
-        // Check if the user is a player in this round
-        if (!roundData.players.includes(auth.user.uid)) {
-          setError('You are not a player in this game');
+        // Store debug info
+        const debugData = {
+          userId: user.uid,
+          roundPlayers: roundData.players || [],
+          roundScorers: roundData.scorers || [],
+          isUserInRound: (roundData.players || []).includes(user.uid),
+          isUserScorer: (roundData.scorers || []).includes(user.uid),
+          roundCreator: roundData.createdBy
+        };
+        setDebugInfo(debugData);
+        
+        // Check if user is part of this round
+        const isUserInRound = Array.isArray(roundData.players) && roundData.players.some(playerId => playerId === user.uid);
+        const isUserScorer = Array.isArray(roundData.scorers) && roundData.scorers.includes(user.uid);
+        const isCreator = roundData.createdBy === user.uid;
+        
+        // Allow the creator to always access the scoring page
+        if (!isUserInRound && !isUserScorer && !isCreator) {
+          setError('You are not part of this round');
           setLoading(false);
           return;
         }
-        
-        // Check if the round is in progress or completed
-        if (roundData.status === 'scheduled') {
-          setError('This game has not started yet');
-          setLoading(false);
-          return;
-        }
-        
-        setRound(roundData);
-        
-        // Fetch course details
+
+        // Get course data
         const courseDoc = await getDoc(doc(db, 'courses', roundData.courseId));
         if (!courseDoc.exists()) {
           setError('Course not found');
           setLoading(false);
           return;
         }
-        
-        setCourse({ id: courseDoc.id, ...courseDoc.data() } as Course);
-        
-        // Check if the user already has scores for this round
-        const scoresQuery = query(
-          collection(db, 'scores'),
-          where('roundId', '==', gameId),
-          where('playerId', '==', auth.user.uid)
-        );
-        
-        const scoresSnapshot = await getDocs(scoresQuery);
-        
-        if (!scoresSnapshot.empty) {
-          const scoreDoc = scoresSnapshot.docs[0];
-          setExistingScore({
-            id: scoreDoc.id,
-            ...scoreDoc.data()
-          } as Score);
-        }
-        
+
+        const courseData = { id: courseDoc.id, ...courseDoc.data() } as Course;
+
+        // Convert players array to RoundPlayer objects
+        const roundPlayers: RoundPlayer[] = roundData.players.map(playerId => {
+          const playerName = roundData.playerNames?.[playerId] || 'Unknown Player';
+          return {
+            id: playerId,
+            name: playerName,
+            isScorer: roundData.scorers?.includes(playerId) || playerId === roundData.createdBy || false
+          };
+        });
+
+        setRound({
+          ...roundData
+        });
+        setCourse(courseData);
+        setLoading(false);
       } catch (error) {
-        console.error('Error loading data:', error);
-        setError('Failed to load game data. Please try again.');
-      } finally {
+        console.error('Error fetching data:', error);
+        setError('Failed to load round data');
         setLoading(false);
       }
     };
-    
+
     fetchData();
-  }, [gameId, auth.user, router]);
-  
-  const handleSaveSuccess = () => {
-    // Navigate back to the round page
-    router.push(`/quick-game/${gameId}`);
-  };
-  
-  const handleCancel = () => {
-    // Navigate back to the round page
-    router.push(`/quick-game/${gameId}`);
-  };
-  
-  if (loading) {
+  }, [params.id, user, authLoading]);
+
+  if (authLoading || loading) {
     return (
       <div className="flex h-screen items-center justify-center">
-        <div className="h-12 w-12 animate-spin rounded-full border-4 border-gray-200 border-t-green-600"></div>
+        <LoadingSpinner />
       </div>
     );
   }
-  
-  if (error || !round || !course || !course.holes) {
+
+  if (error) {
     return (
-      <div className="flex h-screen flex-col items-center justify-center p-4 text-center">
-        <div className="mb-4 rounded-full bg-red-100 p-3 text-red-600">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        </div>
-        <h1 className="mb-2 text-xl font-bold text-gray-800">{error || 'Something went wrong'}</h1>
-        <p className="mb-6 text-gray-600">Unable to load the score capture page.</p>
+      <div className="flex h-screen flex-col items-center justify-center p-4">
+        <div className="mb-4 text-xl font-bold text-red-600">{error}</div>
+        {/* Show debug info in development mode */}
+        {process.env.NODE_ENV === 'development' && debugInfo && (
+          <div className="mb-4 max-w-md rounded-lg bg-gray-100 p-4 text-sm">
+            <h3 className="mb-2 font-bold">Debug Information:</h3>
+            <pre className="overflow-auto text-xs">{JSON.stringify(debugInfo, null, 2)}</pre>
+          </div>
+        )}
         <button
-          onClick={() => router.push(`/quick-game/${gameId}`)}
-          className="rounded-lg bg-green-600 px-6 py-3 text-white shadow-md transition-colors hover:bg-green-700"
+          onClick={() => window.history.back()}
+          className="rounded-md bg-green-600 px-4 py-2 text-white hover:bg-green-700"
         >
-          Back to Game
+          Go Back
         </button>
       </div>
     );
   }
-  
+
+  if (!round || !course || !user) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="text-xl">No data available</div>
+      </div>
+    );
+  }
+
+  // Convert players array to RoundPlayer objects
+  const roundPlayers: RoundPlayer[] = round.players.map(playerId => {
+    const playerName = round.playerNames?.[playerId] || 'Unknown Player';
+    return {
+      id: playerId,
+      name: playerName,
+      isScorer: round.scorers?.includes(playerId) || playerId === round.createdBy || false
+    };
+  });
+
   return (
-    <MobileScoreCapture
+    <EnhancedScoreCapture
       roundId={round.id}
-      playerId={auth.user!.uid}
-      playerName={round.playerNames[auth.user!.uid] || 'You'}
+      currentPlayerId={user.uid}
+      players={roundPlayers}
       courseId={course.id}
       courseName={course.name}
-      holeCount={course.holeCount}
       holes={course.holes}
-      existingScores={existingScore?.holeScores}
-      existingScoreId={existingScore?.id}
-      onSaveSuccess={handleSaveSuccess}
-      onCancel={handleCancel}
+      onSaveSuccess={() => window.location.href = `/quick-game/${round.id}`}
+      onCancel={() => window.history.back()}
+      isComplete={round.isComplete}
+      tourType={round.tourType || 'standard'}
     />
   );
 } 
