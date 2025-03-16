@@ -8,6 +8,8 @@
 
 # testing
 /coverage
+/src/app/test-page/
+/src/app/(protected)/test-score-capture/
 
 # next.js
 /.next/
@@ -19,6 +21,7 @@
 # misc
 .DS_Store
 *.pem
+*.bak
 
 # debug
 npm-debug.log*
